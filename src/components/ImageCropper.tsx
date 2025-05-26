@@ -43,8 +43,12 @@ export default function ImageCropper() {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState<Crop>();  // Remove initial state to let it be set on image load
   const [rotation, setRotation] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [flipHorizontal, setFlipHorizontal] = useState(false);
+  const [flipVertical, setFlipVertical] = useState(false);
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [outputFormat, setOutputFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
+  const [outputQuality, setOutputQuality] = useState(0.92);
   const [isDragging, setIsDragging] = useState(false);
 
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,11 +109,19 @@ export default function ImageCropper() {
     const rotRad = (rotation * Math.PI) / 180;
 
     ctx.save();
+
+    // Apply flips first
+    ctx.translate(flipHorizontal ? canvas.width : 0, flipVertical ? canvas.height : 0);
+    ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
+    
+    // Then apply rotation around the center of the (possibly flipped) canvas
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate(rotRad);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
     // Draw the cropped image
-    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+    // The source crop area (cropX, cropY, canvas.width, canvas.height)
+    // is drawn onto the destination (0,0, canvas.width, canvas.height) of the transformed context
     ctx.drawImage(
       imgRef.current,
       cropX,
@@ -126,7 +138,8 @@ export default function ImageCropper() {
 
     const link = document.createElement('a');
     link.download = `cropped-image.${outputFormat}`;
-    link.href = canvas.toDataURL(`image/${outputFormat}`);
+    // Pass outputQuality for JPEG and WebP. It's ignored for PNG.
+    link.href = canvas.toDataURL(`image/${outputFormat}`, outputQuality);
     link.click();
   };
 
@@ -271,10 +284,23 @@ export default function ImageCropper() {
                       alt="Crop me"
                       src={imageSrc}
                       onLoad={onImageLoad}
-                      style={{ maxWidth: '100%', maxHeight: '600px' }}
+                      style={{
+                        transform: `scale(${zoom}) rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
+                        maxWidth: '100%',
+                        maxHeight: '600px',
+                      }}
                       className="mx-auto"
                     />
                   </ReactCrop>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <Button variant="outline" onClick={() => setFlipHorizontal(prev => !prev)}>
+                    Flip Horizontal {flipHorizontal && "(On)"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setFlipVertical(prev => !prev)}>
+                    Flip Vertical {flipVertical && "(On)"}
+                  </Button>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
@@ -293,9 +319,28 @@ export default function ImageCropper() {
                     </div>
                   </div>
 
-                  <div className="flex items-end gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Zoom</label>
+                    <div className="flex items-center gap-4">
+                      <Slider
+                        value={[zoom]}
+                        onValueChange={(value) => setZoom(value[0])}
+                        min={0.5}
+                        max={3}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-gray-600 w-12 text-right">{zoom.toFixed(1)}x</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Format, Quality, and Download Section */}
+                <div className="grid gap-6 md:grid-cols-2 items-start">
+                  {/* Column 1: Format and (conditional) Quality Slider */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
                       <select
                         value={outputFormat}
                         onChange={(e) => setOutputFormat(e.target.value as 'jpeg' | 'png' | 'webp')}
@@ -307,9 +352,32 @@ export default function ImageCropper() {
                       </select>
                     </div>
 
+                    {(outputFormat === 'jpeg' || outputFormat === 'webp') && (
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Quality ({Math.round(outputQuality * 100)}%)
+                        </label>
+                        <Slider
+                          value={[outputQuality]}
+                          onValueChange={(value) => setOutputQuality(value[0])}
+                          min={0.1}
+                          max={1}
+                          step={0.01}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 2: Download Button */}
+                  {/* Use flex items-end and h-full to push button to the bottom of its grid cell, ensuring alignment
+                      especially when the Quality Slider makes the first column taller.
+                      mt-auto on the button itself ensures it takes available space if the cell is taller than the button.
+                  */}
+                  <div className="flex items-end h-full">
                     <Button 
                       onClick={handleDownload}
-                      className="min-w-[140px]"
+                      className="w-full min-w-[140px] mt-auto" // mt-auto for vertical alignment
                     >
                       Download
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 ml-2">
