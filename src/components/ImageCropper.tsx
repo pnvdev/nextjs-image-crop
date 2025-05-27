@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ function centerAspectCrop(
 
 export default function ImageCropper() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState<Crop>();  // Remove initial state to let it be set on image load
   const [rotation, setRotation] = useState(0);
@@ -50,12 +51,13 @@ export default function ImageCropper() {
   const [outputFormat, setOutputFormat] = useState<'jpeg' | 'png' | 'webp'>('jpeg');
   const [outputQuality, setOutputQuality] = useState(0.92);
   const [isDragging, setIsDragging] = useState(false);
-
+  const [showPreview, setShowPreview] = useState(true);
   const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const reader = new FileReader();
       reader.addEventListener('load', () => {
         setImageSrc(reader.result?.toString() || null);
+        setPreviewSrc(null); // Reset preview when changing image
       });
       reader.readAsDataURL(e.target.files[0]);
     }
@@ -173,7 +175,6 @@ export default function ImageCropper() {
     e.stopPropagation();
     setIsDragging(false);
   }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -183,13 +184,84 @@ export default function ImageCropper() {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
-        reader.addEventListener('load', () => 
-          setImageSrc(reader.result?.toString() || null)
-        );
+        reader.addEventListener('load', () => {
+          setImageSrc(reader.result?.toString() || null);
+          setPreviewSrc(null); // Reset preview when changing image
+        });
         reader.readAsDataURL(file);
       }
     }
   }, []);
+
+  // Function to generate preview image
+  const generatePreview = useCallback(() => {
+    if (!imgRef.current || !crop || !showPreview) {
+      setPreviewSrc(null);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Get the actual pixel dimensions
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+
+    // Set canvas size to match the crop dimensions
+    canvas.width = crop.unit === '%' 
+      ? Math.floor((crop.width / 100) * imgRef.current.naturalWidth)
+      : Math.floor(crop.width * scaleX);
+    canvas.height = crop.unit === '%'
+      ? Math.floor((crop.height / 100) * imgRef.current.naturalHeight)
+      : Math.floor(crop.height * scaleY);
+
+    ctx.imageSmoothingQuality = 'high';
+
+    // Calculate crop coordinates
+    const cropX = crop.unit === '%'
+      ? (crop.x / 100) * imgRef.current.naturalWidth
+      : crop.x * scaleX;
+    const cropY = crop.unit === '%'
+      ? (crop.y / 100) * imgRef.current.naturalHeight
+      : crop.y * scaleY;
+
+    const rotRad = (rotation * Math.PI) / 180;
+
+    ctx.save();
+
+    // Apply flips first
+    ctx.translate(flipHorizontal ? canvas.width : 0, flipVertical ? canvas.height : 0);
+    ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
+    
+    // Then apply rotation around the center of the (possibly flipped) canvas
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(rotRad);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+    // Draw the cropped image
+    ctx.drawImage(
+      imgRef.current,
+      cropX,
+      cropY,
+      canvas.width,
+      canvas.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    ctx.restore();
+
+    // Generate preview URL
+    setPreviewSrc(canvas.toDataURL(`image/${outputFormat}`, outputQuality));
+  }, [crop, imgRef, rotation, flipHorizontal, flipVertical, outputFormat, outputQuality, showPreview]);
+
+  // Update preview when crop or image transformations change
+  useEffect(() => {
+    generatePreview();
+  }, [generatePreview, crop, rotation, zoom, flipHorizontal, flipVertical, outputFormat, outputQuality]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -254,44 +326,75 @@ export default function ImageCropper() {
                     </select>
                   </div>
                   
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setImageSrc(null);
-                      setCrop({
-                        unit: '%',
-                        x: 0,
-                        y: 0,
-                        width: 100,
-                        height: 100
-                      } as Crop);
-                    }}
-                    className="text-sm"
-                  >
-                    Change Image
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowPreview(prev => !prev)}
+                      className="text-sm"
+                    >
+                      {showPreview ? 'Hide Preview' : 'Show Preview'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setImageSrc(null);
+                        setPreviewSrc(null);
+                        setCrop({
+                          unit: '%',
+                          x: 0,
+                          y: 0,
+                          width: 100,
+                          height: 100
+                        } as Crop);
+                      }}
+                      className="text-sm"
+                    >
+                      Change Image
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="relative w-full bg-black/5 rounded-lg overflow-hidden">
-                  <ReactCrop
-                    crop={crop}
-                    onChange={(c) => setCrop(c)}
-                    aspect={aspect}
-                    className="max-h-[600px]"
-                  >
-                    <img
-                      ref={imgRef}
-                      alt="Crop me"
-                      src={imageSrc}
-                      onLoad={onImageLoad}
-                      style={{
-                        transform: `scale(${zoom}) rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
-                        maxWidth: '100%',
-                        maxHeight: '600px',
-                      }}
-                      className="mx-auto"
-                    />
-                  </ReactCrop>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative w-full bg-black/5 rounded-lg overflow-hidden">
+                    <ReactCrop
+                      crop={crop}
+                      onChange={(c) => setCrop(c)}
+                      aspect={aspect}
+                      className="max-h-[600px]"
+                    >
+                      <img
+                        ref={imgRef}
+                        alt="Crop me"
+                        src={imageSrc}
+                        onLoad={onImageLoad}
+                        style={{
+                          transform: `scale(${zoom}) rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
+                          maxWidth: '100%',
+                          maxHeight: '600px',
+                        }}
+                        className="mx-auto"
+                      />
+                    </ReactCrop>
+                  </div>                  {/* Preview Section */}
+                  {showPreview && previewSrc && (
+                    <div className="relative w-full bg-black/5 rounded-lg overflow-hidden flex flex-col">
+                      <div className="absolute top-2 left-2 z-10">
+                        <span className="text-xs font-medium bg-black/70 text-white px-2 py-1 rounded">Preview</span>
+                      </div>
+                      <div className="flex items-center justify-center h-full">
+                        <div className="relative p-4">
+                          <img 
+                            src={previewSrc} 
+                            alt="Preview" 
+                            className="max-w-full max-h-[300px] rounded shadow-sm"
+                          />
+                          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            {outputFormat.toUpperCase()} • {Math.round(outputQuality * 100)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
