@@ -136,6 +136,69 @@ export default function ImageCropper() {
   const [showPresets, setShowPresets] = useState(false);
   const [showPresetInfo, setShowPresetInfo] = useState(false);
   
+  // Filter state
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Instagram-like filter presets
+  const filters = {
+    normal: { 
+      name: 'Normal', 
+      style: {}, 
+      adjustments: { brightness: 100, contrast: 100, saturation: 100 } 
+    },
+    clarendon: { 
+      name: 'Clarendon', 
+      style: { filter: 'contrast(1.2) saturate(1.35)' },
+      adjustments: { brightness: 105, contrast: 120, saturation: 135 } 
+    },
+    gingham: { 
+      name: 'Gingham', 
+      style: { filter: 'brightness(1.05) hue-rotate(-10deg)' },
+      adjustments: { brightness: 105, contrast: 90, saturation: 85 } 
+    },
+    moon: { 
+      name: 'Moon', 
+      style: { filter: 'grayscale(1) contrast(1.1) brightness(1.1)' },
+      adjustments: { brightness: 110, contrast: 110, saturation: 0 } 
+    },
+    lark: { 
+      name: 'Lark', 
+      style: { filter: 'contrast(0.9) brightness(1.1) saturate(1.1)' },
+      adjustments: { brightness: 110, contrast: 90, saturation: 110 } 
+    },
+    reyes: { 
+      name: 'Reyes', 
+      style: { filter: 'sepia(0.22) brightness(1.1) contrast(0.85) saturate(0.75)' },
+      adjustments: { brightness: 110, contrast: 85, saturation: 75 } 
+    },
+    juno: { 
+      name: 'Juno', 
+      style: { filter: 'saturate(1.4) contrast(1.1)' },
+      adjustments: { brightness: 100, contrast: 110, saturation: 140 } 
+    },
+    slumber: { 
+      name: 'Slumber', 
+      style: { filter: 'saturate(0.66) brightness(1.05)' },
+      adjustments: { brightness: 105, contrast: 100, saturation: 66 } 
+    },
+    crema: { 
+      name: 'Crema', 
+      style: { filter: 'sepia(0.5) contrast(1.25) brightness(1.15) saturate(0.9)' },
+      adjustments: { brightness: 115, contrast: 125, saturation: 90 } 
+    },
+    valencia: { 
+      name: 'Valencia', 
+      style: { filter: 'contrast(1.08) brightness(1.08) sepia(0.08)' },
+      adjustments: { brightness: 108, contrast: 108, saturation: 108 } 
+    },
+    sierra: { 
+      name: 'Sierra', 
+      style: { filter: 'contrast(0.95) brightness(0.9)' },
+      adjustments: { brightness: 90, contrast: 95, saturation: 100 } 
+    },
+  };
+  
   // Multiple output options
   const [outputOptions, setOutputOptions] = useState<{
     id: string;
@@ -246,18 +309,24 @@ export default function ImageCropper() {
       0,
       canvas.width,
       canvas.height
-    );
-
-    // Apply image adjustments (brightness, contrast, saturation)
-    if (brightness !== 100 || contrast !== 100 || saturation !== 100) {
+    );    // Apply image adjustments (brightness, contrast, saturation)
+    if (brightness !== 100 || contrast !== 100 || saturation !== 100 || activeFilter) {
       // Get the image data to apply adjustments
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
 
-      // Convert adjustment values from percentages to actual multipliers
-      const brightnessValue = brightness / 100;
-      const contrastValue = contrast / 100;
-      const saturationValue = saturation / 100;
+      // Get filter adjustments if a filter is active
+      let brightnessValue = brightness / 100;
+      let contrastValue = contrast / 100;
+      let saturationValue = saturation / 100;
+      
+      // Apply filter adjustments if a filter is selected
+      if (activeFilter && filters[activeFilter as keyof typeof filters]) {
+        const filterAdjustments = filters[activeFilter as keyof typeof filters].adjustments;
+        brightnessValue = (filterAdjustments.brightness / 100) * brightnessValue;
+        contrastValue = (filterAdjustments.contrast / 100) * contrastValue;
+        saturationValue = (filterAdjustments.saturation / 100) * saturationValue;
+      }
 
       // Apply adjustments to each pixel
       for (let i = 0; i < data.length; i += 4) {
@@ -288,10 +357,9 @@ export default function ImageCropper() {
       // Put the modified image data back on the canvas
       ctx.putImageData(imageData, 0, 0);
     }
-
   ctx.restore();
     return canvas;
-  }, [imgRef, crop, rotation, flipHorizontal, flipVertical, brightness, contrast, saturation, zoom]);
+  }, [imgRef, crop, rotation, flipHorizontal, flipVertical, brightness, contrast, saturation, zoom, activeFilter, filters]);
 
   // Function to download a single cropped image
   const downloadCroppedImage = (
@@ -440,9 +508,8 @@ export default function ImageCropper() {
     setPreviewSrc(canvas.toDataURL(`image/${outputFormat}`, outputQuality));
   }, [showPreview, createCroppedCanvas, outputFormat, outputQuality]);
   // Update preview when crop or image transformations change
-  useEffect(() => {
-    generatePreview();
-  }, [generatePreview, crop, rotation, zoom, flipHorizontal, flipVertical, brightness, contrast, saturation, outputFormat, outputQuality]);
+  useEffect(() => {    generatePreview();
+  }, [generatePreview, crop, rotation, zoom, flipHorizontal, flipVertical, brightness, contrast, saturation, outputFormat, outputQuality, activeFilter]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -635,11 +702,11 @@ export default function ImageCropper() {
                         ref={imgRef}
                         alt="Crop me"
                         src={imageSrc}
-                        onLoad={onImageLoad}
-                        style={{
+                        onLoad={onImageLoad}                        style={{
                           transform: `scale(${zoom}) rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
                           maxWidth: '100%',
                           maxHeight: '600px',
+                          ...(activeFilter && activeFilter !== 'normal' ? filters[activeFilter as keyof typeof filters].style : {})
                         }}
                         className="mx-auto"
                       />
@@ -651,12 +718,12 @@ export default function ImageCropper() {
                         <span className="text-xs font-medium bg-black/70 text-white px-2 py-1 rounded">Preview</span>
                       </div>
                       <div className="flex items-center justify-center h-full">
-                        <div className="relative p-4">
-                          <img 
+                        <div className="relative p-4">                          <img 
                             src={previewSrc} 
                             alt="Preview" 
                             className="max-w-full max-h-[300px] rounded shadow-sm"
-                          />                          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            style={activeFilter && activeFilter !== 'normal' ? filters[activeFilter as keyof typeof filters].style : undefined}
+                          /><div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                             {outputFormat.toUpperCase()} • {Math.round(outputQuality * 100)}%
                             {selectedPreset && (() => {
                               const preset = CROP_PRESETS.find(p => p.name === selectedPreset);
@@ -665,6 +732,11 @@ export default function ImageCropper() {
                             {(brightness !== 100 || contrast !== 100 || saturation !== 100) && (
                               <span className="ml-1">
                                 • Adjusted
+                              </span>
+                            )}
+                            {activeFilter && activeFilter !== 'normal' && (
+                              <span className="ml-1">
+                                • Filter: {filters[activeFilter as keyof typeof filters].name}
                               </span>
                             )}
                           </div>
@@ -761,6 +833,69 @@ export default function ImageCropper() {
                           Reset to Default
                         </Button>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Instagram-like Filters */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-medium text-gray-700">Filters</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFilters(prev => !prev)}
+                      className="text-xs"
+                    >
+                      {showFilters ? 'Hide Filters' : 'Show Filters'}
+                    </Button>
+                  </div>
+                  
+                  {showFilters && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div className="overflow-x-auto pb-2">
+                        <div className="flex space-x-4">
+                          {Object.entries(filters).map(([id, filter]) => (
+                            <div 
+                              key={id} 
+                              className={`flex flex-col items-center cursor-pointer transition-all ${
+                                activeFilter === id ? 'scale-105 ring-2 ring-primary ring-offset-2' : 'hover:scale-105'
+                              }`}
+                              onClick={() => setActiveFilter(id === 'normal' && activeFilter === 'normal' ? null : id)}
+                            >                              <div 
+                                className="w-20 h-20 mb-1 rounded-md overflow-hidden bg-gray-200 border border-gray-300 relative"
+                              >
+                                {imageSrc && (
+                                  <div 
+                                    className="absolute inset-0"
+                                    style={{ 
+                                      backgroundImage: `url(${imageSrc})`,
+                                      backgroundSize: 'cover',
+                                      backgroundPosition: 'center',
+                                      ...filter.style
+                                    }}
+                                  ></div>
+                                )}
+                              </div>
+                              <span className="text-xs font-medium">{filter.name}</span>
+                              {activeFilter === id && <div className="mt-1 w-3 h-1 bg-primary rounded-full"></div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {activeFilter && activeFilter !== 'normal' && (
+                        <div className="mt-4 flex justify-end">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setActiveFilter('normal')}
+                            className="text-xs"
+                          >
+                            Reset Filter
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
