@@ -7,6 +7,77 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 
+/**
+ * Define preset crop dimensions for social media, documents, and other standard formats.
+ * Presets include optimized dimensions for various platforms and use cases.
+ * @author PNV Development Team
+ */
+type PresetCategory = 'Social Media' | 'Documents' | 'Print' | 'Devices' | 'E-commerce';
+
+interface CropPreset {
+  name: string;
+  width: number;
+  height: number;
+  category: PresetCategory;
+  aspectRatio: number;
+  description?: string; // Optional description for the preset
+}
+
+const CROP_PRESETS: CropPreset[] = [
+  // Social Media Presets
+  { name: 'Instagram Post', width: 1080, height: 1080, category: 'Social Media', aspectRatio: 1, description: 'Square format for feed posts' },
+  { name: 'Instagram Story', width: 1080, height: 1920, category: 'Social Media', aspectRatio: 9/16, description: 'Vertical format for stories' },
+  { name: 'Instagram Reel', width: 1080, height: 1920, category: 'Social Media', aspectRatio: 9/16, description: 'Full-screen vertical videos' },
+  { name: 'Instagram Profile', width: 320, height: 320, category: 'Social Media', aspectRatio: 1, description: 'Profile picture' },
+  { name: 'Facebook Post', width: 1200, height: 630, category: 'Social Media', aspectRatio: 1200/630, description: 'Landscape format for feed' },
+  { name: 'Facebook Cover', width: 1640, height: 624, category: 'Social Media', aspectRatio: 1640/624, description: 'Page cover photo' },
+  { name: 'Facebook Profile', width: 500, height: 500, category: 'Social Media', aspectRatio: 1, description: 'Profile picture' },
+  { name: 'X/Twitter Post', width: 1600, height: 900, category: 'Social Media', aspectRatio: 16/9, description: 'Standard tweet image' },
+  { name: 'X/Twitter Header', width: 1500, height: 500, category: 'Social Media', aspectRatio: 3/1, description: 'Profile header image' },
+  { name: 'X/Twitter Profile', width: 400, height: 400, category: 'Social Media', aspectRatio: 1, description: 'Profile picture' },
+  { name: 'LinkedIn Post', width: 1200, height: 627, category: 'Social Media', aspectRatio: 1200/627, description: 'Standard post image' },
+  { name: 'LinkedIn Cover', width: 1584, height: 396, category: 'Social Media', aspectRatio: 1584/396, description: 'Profile cover image' },
+  { name: 'LinkedIn Profile', width: 400, height: 400, category: 'Social Media', aspectRatio: 1, description: 'Profile picture' },
+  { name: 'YouTube Thumbnail', width: 1280, height: 720, category: 'Social Media', aspectRatio: 16/9, description: 'Video thumbnail' },
+  { name: 'YouTube Banner', width: 2560, height: 1440, category: 'Social Media', aspectRatio: 16/9, description: 'Channel banner' },
+  { name: 'Pinterest Pin', width: 1000, height: 1500, category: 'Social Media', aspectRatio: 2/3, description: 'Vertical pin format' },
+  { name: 'TikTok Video', width: 1080, height: 1920, category: 'Social Media', aspectRatio: 9/16, description: 'Full-screen vertical video' },
+  { name: 'Snapchat Story', width: 1080, height: 1920, category: 'Social Media', aspectRatio: 9/16, description: 'Vertical story format' },
+  
+  // Document Presets
+  { name: 'ID Photo', width: 413, height: 531, category: 'Documents', aspectRatio: 413/531, description: 'Standard ID dimensions' },
+  { name: 'Passport Photo', width: 35, height: 45, category: 'Documents', aspectRatio: 35/45, description: 'International standard (mm)' },
+  { name: 'Visa Photo', width: 51, height: 51, category: 'Documents', aspectRatio: 1, description: 'Square format (mm)' },
+  { name: 'Resume Photo', width: 200, height: 200, category: 'Documents', aspectRatio: 1, description: 'Professional headshot' },
+  { name: 'Business Card', width: 1050, height: 600, category: 'Documents', aspectRatio: 1050/600, description: 'Standard size (3.5×2 inches)' },
+  { name: 'US Letter', width: 816, height: 1056, category: 'Documents', aspectRatio: 8.5/11, description: 'US standard page' },
+  { name: 'A4 Paper', width: 794, height: 1123, category: 'Documents', aspectRatio: 210/297, description: 'International standard page' },
+  
+  // Print Presets
+  { name: '4×6 Print', width: 1200, height: 1800, category: 'Print', aspectRatio: 2/3, description: 'Standard photo print' },
+  { name: '5×7 Print', width: 1500, height: 2100, category: 'Print', aspectRatio: 5/7, description: 'Medium photo print' },
+  { name: '8×10 Print', width: 2400, height: 3000, category: 'Print', aspectRatio: 4/5, description: 'Large photo print' },
+  { name: '11×14 Print', width: 3300, height: 4200, category: 'Print', aspectRatio: 11/14, description: 'Poster size print' },
+  { name: '16×20 Print', width: 4800, height: 6000, category: 'Print', aspectRatio: 4/5, description: 'Large poster print' },
+  { name: 'Wallet Print', width: 1050, height: 1350, category: 'Print', aspectRatio: 7/9, description: 'Small wallet-sized print' },
+  
+  // Device Screen Presets
+  { name: 'Smartphone', width: 1080, height: 1920, category: 'Devices', aspectRatio: 9/16, description: 'Common mobile screen' },
+  { name: 'Tablet', width: 1620, height: 2160, category: 'Devices', aspectRatio: 3/4, description: 'Common tablet screen' },
+  { name: 'Desktop Wallpaper', width: 1920, height: 1080, category: 'Devices', aspectRatio: 16/9, description: 'FHD monitor resolution' },
+  { name: '4K Wallpaper', width: 3840, height: 2160, category: 'Devices', aspectRatio: 16/9, description: 'UHD monitor resolution' },
+  { name: 'MacBook Pro', width: 1440, height: 900, category: 'Devices', aspectRatio: 16/10, description: 'Standard display resolution' },
+  { name: 'iPhone Wallpaper', width: 1290, height: 2796, category: 'Devices', aspectRatio: 1290/2796, description: 'iPhone 15 Pro Max' },
+  
+  // E-commerce Presets
+  { name: 'Product Image', width: 2000, height: 2000, category: 'E-commerce', aspectRatio: 1, description: 'Square product photo' },
+  { name: 'Amazon Product', width: 2000, height: 2000, category: 'E-commerce', aspectRatio: 1, description: 'Main product image' },
+  { name: 'eBay Product', width: 1600, height: 1600, category: 'E-commerce', aspectRatio: 1, description: 'Recommended size' },
+  { name: 'Etsy Product', width: 2000, height: 1600, category: 'E-commerce', aspectRatio: 5/4, description: 'Landscape format' },
+  { name: 'Shopify Product', width: 2048, height: 2048, category: 'E-commerce', aspectRatio: 1, description: 'High-res product image' },
+  { name: 'Banner Ad', width: 728, height: 90, category: 'E-commerce', aspectRatio: 728/90, description: 'Standard leaderboard ad' },
+];
+
 function centerAspectCrop(
   mediaWidth: number,
   mediaHeight: number,
@@ -52,6 +123,11 @@ export default function ImageCropper() {
   const [outputQuality, setOutputQuality] = useState(0.92);
   const [isDragging, setIsDragging] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+    // Preset dimensions state
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [presetCategory, setPresetCategory] = useState<PresetCategory | 'All'>('Social Media');
+  const [showPresets, setShowPresets] = useState(false);
+  const [showPresetInfo, setShowPresetInfo] = useState(false);
   
   // Multiple output options
   const [outputOptions, setOutputOptions] = useState<{
@@ -229,6 +305,36 @@ export default function ImageCropper() {
       const newCrop = centerAspectCrop(width, height, newAspect);
       setCrop(newCrop);
     }
+    
+    // Clear any selected preset when manually changing aspect ratio
+    setSelectedPreset(null);
+  };
+  /**
+   * Applies a preset crop dimension to the current image.
+   * Centers the crop with the specified aspect ratio from the preset.
+   * 
+   * @param presetName - The name of the preset to apply
+   * @return void
+   */
+  const applyPreset = (presetName: string) => {
+    if (!imgRef.current) return;
+    
+    const preset = CROP_PRESETS.find(p => p.name === presetName);
+    if (!preset) return;
+    
+    // Set the aspect ratio based on the preset
+    setAspect(preset.aspectRatio);
+    
+    // Apply the crop with the new aspect ratio
+    const { width, height } = imgRef.current;
+    const newCrop = centerAspectCrop(width, height, preset.aspectRatio);
+    setCrop(newCrop);
+    
+    // Update selected preset
+    setSelectedPreset(presetName);
+    
+    // Generate a new preview with the updated crop
+    generatePreview();
   };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -333,8 +439,7 @@ export default function ImageCropper() {
                 </label>
               </div>
             ) : (
-              <div className="space-y-6">
-                <div className="flex flex-wrap gap-4 items-center justify-between">
+              <div className="space-y-6">                <div className="flex flex-wrap gap-4 items-center justify-between">
                   <div className="flex gap-4 items-center">
                     <label className="text-sm font-medium text-gray-700">Aspect Ratio:</label>
                     <select
@@ -348,6 +453,15 @@ export default function ImageCropper() {
                       <option value="0.5625">Portrait (9:16)</option>
                       <option value="1.3333333333333333">Standard (4:3)</option>
                     </select>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPresets(prev => !prev)}
+                      className="text-sm"
+                    >
+                      {showPresets ? 'Hide Presets' : 'Show Presets'}
+                    </Button>
                   </div>
                   
                   <div className="flex gap-2">
@@ -370,13 +484,93 @@ export default function ImageCropper() {
                           width: 100,
                           height: 100
                         } as Crop);
+                        setSelectedPreset(null);
                       }}
                       className="text-sm"
                     >
                       Change Image
                     </Button>
                   </div>
-                </div>
+                </div>                {/* Preset Crop Dimensions */}
+                {showPresets && (
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                    <div className="mb-3">
+                      <div className="flex flex-wrap justify-between items-center mb-2">
+                        <h3 className="text-sm font-medium text-gray-700 mb-2 md:mb-0">Preset Dimensions</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            key="All"
+                            variant={presetCategory === 'All' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setPresetCategory('All')}
+                            className="text-xs"
+                          >
+                            All
+                          </Button>
+                          {(['Social Media', 'Documents', 'Print', 'Devices', 'E-commerce'] as const).map(category => (
+                            <Button
+                              key={category}
+                              variant={presetCategory === category ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setPresetCategory(category)}
+                              className="text-xs"
+                            >
+                              {category}
+                            </Button>
+                          ))}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowPresetInfo(prev => !prev)}
+                            className="text-xs"
+                          >
+                            {showPresetInfo ? 'Hide Info' : 'Show Info'}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                        {CROP_PRESETS
+                          .filter(preset => presetCategory === 'All' || preset.category === presetCategory)
+                          .map(preset => (
+                            <Button
+                              key={preset.name}
+                              variant={selectedPreset === preset.name ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => applyPreset(preset.name)}
+                              className="text-xs justify-start overflow-hidden"
+                              title={showPresetInfo ? `${preset.width}×${preset.height} - ${preset.description || ''}` : undefined}
+                            >
+                              <div className="truncate flex items-center w-full">
+                                <span className="truncate">{preset.name}</span>
+                                {showPresetInfo && (
+                                  <span className="text-xs opacity-70 ml-1 truncate">
+                                    ({preset.width}×{preset.height})
+                                  </span>
+                                )}
+                              </div>
+                            </Button>
+                          ))}
+                      </div>
+                    </div>
+                    
+                    {selectedPreset && (
+                      <div className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-200 mt-2">
+                        <div className="font-medium">Applied preset: {selectedPreset}</div>
+                        {(() => {
+                          const preset = CROP_PRESETS.find(p => p.name === selectedPreset);
+                          return preset ? (
+                            <div className="mt-1">
+                              <div>Dimensions: {preset.width}×{preset.height} pixels</div>
+                              <div>Aspect Ratio: {preset.aspectRatio.toFixed(3)}</div>
+                              {preset.description && <div>Description: {preset.description}</div>}
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative w-full bg-black/5 rounded-lg overflow-hidden">
@@ -414,6 +608,10 @@ export default function ImageCropper() {
                           />
                           <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                             {outputFormat.toUpperCase()} • {Math.round(outputQuality * 100)}%
+                            {selectedPreset && (() => {
+                              const preset = CROP_PRESETS.find(p => p.name === selectedPreset);
+                              return preset ? ` • ${preset.width}×${preset.height}` : '';
+                            })()}
                           </div>
                         </div>
                       </div>
