@@ -123,7 +123,14 @@ export default function ImageCropper() {
   const [outputQuality, setOutputQuality] = useState(0.92);
   const [isDragging, setIsDragging] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
-    // Preset dimensions state
+  
+  // Image adjustment controls
+  const [brightness, setBrightness] = useState(100); // 100% is normal
+  const [contrast, setContrast] = useState(100);     // 100% is normal
+  const [saturation, setSaturation] = useState(100); // 100% is normal
+  const [showAdjustments, setShowAdjustments] = useState(false);
+  
+  // Preset dimensions state
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [presetCategory, setPresetCategory] = useState<PresetCategory | 'All'>('Social Media');
   const [showPresets, setShowPresets] = useState(false);
@@ -188,13 +195,17 @@ export default function ImageCropper() {
     const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
     const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
 
+    // Apply zoom factor to scaling calculations
+    const zoomScaleX = scaleX / zoom;
+    const zoomScaleY = scaleY / zoom;
+    
     // Set canvas size to match the crop dimensions with optional scaling
     const baseWidth = crop.unit === '%' 
       ? Math.floor((crop.width / 100) * imgRef.current.naturalWidth)
-      : Math.floor(crop.width * scaleX);
+      : Math.floor(crop.width * zoomScaleX);
     const baseHeight = crop.unit === '%'
       ? Math.floor((crop.height / 100) * imgRef.current.naturalHeight)
-      : Math.floor(crop.height * scaleY);
+      : Math.floor(crop.height * zoomScaleY);
     
     // Apply output scaling
     canvas.width = Math.floor(baseWidth * scale);
@@ -203,13 +214,13 @@ export default function ImageCropper() {
     ctx.imageSmoothingQuality = 'high';
     ctx.imageSmoothingEnabled = true;
 
-    // Calculate crop coordinates
+    // Calculate crop coordinates adjusted for zoom
     const cropX = crop.unit === '%'
       ? (crop.x / 100) * imgRef.current.naturalWidth
-      : crop.x * scaleX;
+      : crop.x * zoomScaleX;
     const cropY = crop.unit === '%'
       ? (crop.y / 100) * imgRef.current.naturalHeight
-      : crop.y * scaleY;
+      : crop.y * zoomScaleY;
 
     const rotRad = (rotation * Math.PI) / 180;
 
@@ -237,9 +248,50 @@ export default function ImageCropper() {
       canvas.height
     );
 
-    ctx.restore();
+    // Apply image adjustments (brightness, contrast, saturation)
+    if (brightness !== 100 || contrast !== 100 || saturation !== 100) {
+      // Get the image data to apply adjustments
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Convert adjustment values from percentages to actual multipliers
+      const brightnessValue = brightness / 100;
+      const contrastValue = contrast / 100;
+      const saturationValue = saturation / 100;
+
+      // Apply adjustments to each pixel
+      for (let i = 0; i < data.length; i += 4) {
+        // Apply brightness
+        if (brightness !== 100) {
+          data[i] = Math.min(255, Math.max(0, data[i] * brightnessValue));     // R
+          data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * brightnessValue)); // G
+          data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * brightnessValue)); // B
+        }
+
+        // Apply contrast
+        if (contrast !== 100) {
+          const factor = (259 * (contrastValue * 255 + 255)) / (255 * (259 - contrastValue * 255));
+          data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
+          data[i + 1] = Math.min(255, Math.max(0, factor * (data[i + 1] - 128) + 128));
+          data[i + 2] = Math.min(255, Math.max(0, factor * (data[i + 2] - 128) + 128));
+        }
+
+        // Apply saturation
+        if (saturation !== 100) {
+          const gray = 0.2989 * data[i] + 0.5870 * data[i + 1] + 0.1140 * data[i + 2]; // Weighted grayscale conversion
+          data[i] = Math.min(255, Math.max(0, gray + saturationValue * (data[i] - gray)));
+          data[i + 1] = Math.min(255, Math.max(0, gray + saturationValue * (data[i + 1] - gray)));
+          data[i + 2] = Math.min(255, Math.max(0, gray + saturationValue * (data[i + 2] - gray)));
+        }
+      }
+
+      // Put the modified image data back on the canvas
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+  ctx.restore();
     return canvas;
-  }, [imgRef, crop, rotation, flipHorizontal, flipVertical]);
+  }, [imgRef, crop, rotation, flipHorizontal, flipVertical, brightness, contrast, saturation, zoom]);
 
   // Function to download a single cropped image
   const downloadCroppedImage = (
@@ -387,11 +439,10 @@ export default function ImageCropper() {
     // Generate preview URL
     setPreviewSrc(canvas.toDataURL(`image/${outputFormat}`, outputQuality));
   }, [showPreview, createCroppedCanvas, outputFormat, outputQuality]);
-
   // Update preview when crop or image transformations change
   useEffect(() => {
     generatePreview();
-  }, [generatePreview, crop, rotation, zoom, flipHorizontal, flipVertical, outputFormat, outputQuality]);
+  }, [generatePreview, crop, rotation, zoom, flipHorizontal, flipVertical, brightness, contrast, saturation, outputFormat, outputQuality]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -605,27 +656,113 @@ export default function ImageCropper() {
                             src={previewSrc} 
                             alt="Preview" 
                             className="max-w-full max-h-[300px] rounded shadow-sm"
-                          />
-                          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                          />                          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                             {outputFormat.toUpperCase()} • {Math.round(outputQuality * 100)}%
                             {selectedPreset && (() => {
                               const preset = CROP_PRESETS.find(p => p.name === selectedPreset);
                               return preset ? ` • ${preset.width}×${preset.height}` : '';
                             })()}
+                            {(brightness !== 100 || contrast !== 100 || saturation !== 100) && (
+                              <span className="ml-1">
+                                • Adjusted
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                </div>                <div className="grid grid-cols-2 gap-4 mb-4">
                   <Button variant="outline" onClick={() => setFlipHorizontal(prev => !prev)}>
                     Flip Horizontal {flipHorizontal && "(On)"}
                   </Button>
                   <Button variant="outline" onClick={() => setFlipVertical(prev => !prev)}>
                     Flip Vertical {flipVertical && "(On)"}
                   </Button>
+                </div>
+
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-sm font-medium text-gray-700">Image Adjustments</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAdjustments(prev => !prev)}
+                      className="text-xs"
+                    >
+                      {showAdjustments ? 'Hide Adjustments' : 'Show Adjustments'}
+                    </Button>
+                  </div>
+                  
+                  {showAdjustments && (
+                    <div className="space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Brightness
+                          </label>
+                          <span className="text-xs text-gray-600">{brightness}%</span>
+                        </div>
+                        <Slider
+                          value={[brightness]}
+                          onValueChange={(value) => setBrightness(value[0])}
+                          min={0}
+                          max={200}
+                          step={1}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Contrast
+                          </label>
+                          <span className="text-xs text-gray-600">{contrast}%</span>
+                        </div>
+                        <Slider
+                          value={[contrast]}
+                          onValueChange={(value) => setContrast(value[0])}
+                          min={0}
+                          max={200}
+                          step={1}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Saturation
+                          </label>
+                          <span className="text-xs text-gray-600">{saturation}%</span>
+                        </div>
+                        <Slider
+                          value={[saturation]}
+                          onValueChange={(value) => setSaturation(value[0])}
+                          min={0}
+                          max={200}
+                          step={1}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setBrightness(100);
+                            setContrast(100);
+                            setSaturation(100);
+                          }}
+                          className="text-xs"
+                        >
+                          Reset to Default
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
