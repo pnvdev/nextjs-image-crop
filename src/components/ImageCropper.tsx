@@ -113,6 +113,70 @@ export default function ImageCropper() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  
+  // Helper functions for EXIF data handling
+  const extractExifData = (base64Data: string): ArrayBuffer | null => {
+    try {
+      // Convert base64 to binary
+      const binary = atob(base64Data);
+      const data = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        data[i] = binary.charCodeAt(i);
+      }
+      
+      // Check for EXIF marker (FF E1)
+      for (let i = 0; i < data.length - 1; i++) {
+        if (data[i] === 0xFF && data[i + 1] === 0xE1) {
+          // Get EXIF segment length (includes the length bytes)
+          const segmentLength = (data[i + 2] << 8) + data[i + 3];
+          
+          // Extract EXIF segment (including marker and length)
+          const exifSegment = data.slice(i, i + 2 + segmentLength);
+          return exifSegment.buffer;
+        }
+      }
+    } catch (error) {
+      console.error('Error extracting EXIF data:', error);
+    }
+    return null;
+  };
+  
+  const insertExifData = (imageBase64: string, exifData: ArrayBuffer): string => {
+    try {
+      // Convert base64 to binary
+      const binary = atob(imageBase64);
+      const imageData = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        imageData[i] = binary.charCodeAt(i);
+      }
+        // Find the position after SOI marker (FF D8)
+      const insertPosition = 2; // Default to just after SOI
+      
+      // Create a new array with the EXIF data inserted
+      const exifUint8 = new Uint8Array(exifData);
+      const result = new Uint8Array(imageData.length + exifUint8.length);
+      
+      // Copy SOI marker
+      result.set(imageData.slice(0, insertPosition), 0);
+      
+      // Insert EXIF data
+      result.set(exifUint8, insertPosition);
+      
+      // Copy the rest of the image
+      result.set(imageData.slice(insertPosition), insertPosition + exifUint8.length);
+      
+      // Convert back to base64
+      let resultStr = '';
+      for (let i = 0; i < result.length; i++) {
+        resultStr += String.fromCharCode(result[i]);
+      }
+      return btoa(resultStr);
+    } catch (error) {
+      console.error('Error inserting EXIF data:', error);
+      return imageBase64; // Return original if there's an error
+    }
+  };
+  
   const [crop, setCrop] = useState<Crop>();  // Remove initial state to let it be set on image load
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -139,6 +203,9 @@ export default function ImageCropper() {
   // Filter state
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  
+  // EXIF data preservation
+  const [preserveExif, setPreserveExif] = useState(false);
   
   // Instagram-like filter presets
   const filters = {
@@ -360,7 +427,6 @@ export default function ImageCropper() {
   ctx.restore();
     return canvas;
   }, [imgRef, crop, rotation, flipHorizontal, flipVertical, brightness, contrast, saturation, zoom, activeFilter, filters]);
-
   // Function to download a single cropped image
   const downloadCroppedImage = (
     format: 'jpeg' | 'png' | 'webp' = 'jpeg',
@@ -375,8 +441,52 @@ export default function ImageCropper() {
     const filename = customFilename || `cropped-image-${scale.toFixed(1)}x.${format}`;
     link.download = filename;
     
-    // Pass quality for JPEG and WebP. It's ignored for PNG.
-    link.href = canvas.toDataURL(`image/${format}`, quality);
+    // Handle EXIF data
+    if (preserveExif && imageSrc && imageSrc.startsWith('data:image/')) {
+      try {
+        // Create a new image with the same dimensions as the canvas
+        const img = new Image();
+        img.src = imageSrc;
+        
+        // Create a temporary canvas to combine the cropped image with EXIF data
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          // Draw the cropped image on the temporary canvas
+          tempCtx.drawImage(canvas, 0, 0);
+          
+          // Get the cropped image data without EXIF
+          const croppedImageData = tempCanvas.toDataURL(`image/${format}`, quality);
+          
+          // Extract base64 part of data URL
+          const base64Data = croppedImageData.split(',')[1];
+          
+          // Extract EXIF data from original image
+          const originalBase64 = imageSrc.split(',')[1];
+          const exifData = extractExifData(originalBase64);
+          
+          // If EXIF data exists and format supports it (JPEG)
+          if (exifData && format === 'jpeg') {
+            // Combine EXIF data with cropped image
+            const imageWithExif = insertExifData(base64Data, exifData);
+            link.href = `data:image/jpeg;base64,${imageWithExif}`;
+          } else {
+            // Just use the regular data URL if no EXIF or format doesn't support it
+            link.href = croppedImageData;
+          }
+        }
+      } catch (error) {
+        console.error('Error preserving EXIF data:', error);
+        // Fallback to standard method without EXIF
+        link.href = canvas.toDataURL(`image/${format}`, quality);
+      }
+    } else {
+      // Standard method without preserving EXIF
+      link.href = canvas.toDataURL(`image/${format}`, quality);
+    }
+    
     link.click();
   };
 
@@ -977,6 +1087,27 @@ export default function ImageCropper() {
                         />
                       </div>
                     )}
+
+                    {/* EXIF Metadata Preservation */}
+                    <div className="mt-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="preserve-exif"
+                          checked={preserveExif}
+                          onChange={() => setPreserveExif(prev => !prev)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="preserve-exif" className="ml-2 block text-sm text-gray-700">
+                          Preserve EXIF metadata
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {preserveExif 
+                          ? "EXIF data like camera settings and location will be preserved in the output image (JPEG format only)"
+                          : "EXIF metadata will be stripped from the output image"}
+                      </p>
+                    </div>
 
                     {/* Multiple Output Options */}
                     {showMultipleOptions && (
