@@ -15,27 +15,28 @@ const mockGetContext = jest.fn(() => ({
   imageSmoothingQuality: '',
 }));
 
-global.HTMLCanvasElement.prototype.getContext = mockGetContext;
+// Type assertion for HTMLCanvasElement prototype mocking
+(global.HTMLCanvasElement.prototype.getContext as jest.Mock) = mockGetContext;
 global.HTMLCanvasElement.prototype.toDataURL = mockToDataURL;
 
 // Mock FileReader
-const mockReaderOnload = jest.fn();
 const mockReadAsDataURL = jest.fn(function(this: FileReader) {
   // Simulate successful file read by calling onload
   if (this.onload) {
     act(() => {
-      // @ts-ignore
+      // @ts-expect-error - Mocking FileReader onload event
       this.onload({ target: { result: 'data:image/png;base64,mockimagedata' } } as ProgressEvent<FileReader>);
     });
   }
 });
+
 global.FileReader = jest.fn(() => ({
   readAsDataURL: mockReadAsDataURL,
   onload: null, // Will be set by the component
-  addEventListener: jest.fn((event, cb) => { // Simplified addEventListener for onload
+  addEventListener: jest.fn((event: string, cb: () => void) => { // Simplified addEventListener for onload
     if (event === 'load') {
-      // @ts-ignore
-      (this as any).onload = cb;
+      // @ts-expect-error - Intentionally assigning callback to onload for mocking
+      (this as FileReader).onload = cb;
     }
   }),
   removeEventListener: jest.fn(),
@@ -48,7 +49,7 @@ global.FileReader = jest.fn(() => ({
   readyState: 0,
   result: null,
   error: null,
-})) as any;
+})) as unknown as typeof FileReader;
 
 
 // Helper function to simulate file upload and image load
@@ -58,11 +59,10 @@ async function uploadImage(container: HTMLElement) {
 
   // Mock naturalWidth and naturalHeight for the image object that will be created
   // This needs to be done before the 'load' event is dispatched on the image
-  Object.defineProperty(global.Image.prototype, 'naturalWidth', { value: 100, configurable: true });
-  Object.defineProperty(global.Image.prototype, 'naturalHeight', { value: 100, configurable: true });
-  Object.defineProperty(global.Image.prototype, 'width', { value: 100, configurable: true });
-  Object.defineProperty(global.Image.prototype, 'height', { value: 100, configurable: true });
-
+  global.Image.prototype.naturalWidth = 100;
+  global.Image.prototype.naturalHeight = 100;
+  global.Image.prototype.width = 100;
+  global.Image.prototype.height = 100;
 
   await act(async () => {
     fireEvent.change(fileInput, { target: { files: [file] } });
@@ -78,11 +78,11 @@ async function uploadImage(container: HTMLElement) {
 describe('ImageCropper', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset any specific image prototype mocks if they were changed in a test
-    Object.defineProperty(global.Image.prototype, 'naturalWidth', { value: 0, configurable: true });
-    Object.defineProperty(global.Image.prototype, 'naturalHeight', { value: 0, configurable: true });
-    Object.defineProperty(global.Image.prototype, 'width', { value: 0, configurable: true });
-    Object.defineProperty(global.Image.prototype, 'height', { value: 0, configurable: true });
+    // Properties are already defined in jest.setup.js, so just reset values
+    global.Image.prototype.naturalWidth = 0;
+    global.Image.prototype.naturalHeight = 0;
+    global.Image.prototype.width = 0;
+    global.Image.prototype.height = 0;
   });
 
   it('renders the upload prompt initially', () => {
@@ -267,10 +267,9 @@ describe('ImageCropper', () => {
             // Example: ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
             expect(canvasContextMock.translate).toHaveBeenCalledWith(expect.any(Number), 0); // canvas.width will be a number
             expect(canvasContextMock.scale).toHaveBeenCalledWith(-1, 1);
-            
-            // Clear mocks for next part of test or other tests
-            (canvasContextMock.translate as jest.Mock).mockClear();
-            (canvasContextMock.scale as jest.Mock).mockClear();
+              // Clear mocks for next part of test or other tests
+            (canvasContextMock.translate as jest.MockedFunction<typeof canvasContextMock.translate>).mockClear();
+            (canvasContextMock.scale as jest.MockedFunction<typeof canvasContextMock.scale>).mockClear();
 
             // Deactivate horizontal flip, activate vertical
             await act(async () => {
